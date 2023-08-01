@@ -10,7 +10,7 @@ Usage: nmapx [options]
 Options:
   -h, --help                    Print this help
   -v, --version                 Print version information
-  -x, --xml                     Qualys xml to parse
+  -x, --xml                     Nmap xml to parse
 ```
 
 ## How to use it

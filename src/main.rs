@@ -18,7 +18,7 @@ fn print_help() {
     println!("Options:");
     println!("  -h, --help\t\t\tPrint this help");
     println!("  -v, --version\t\t\tPrint version information");
-    println!("  -x, --xml\t\t\tQualys xml to parse");
+    println!("  -x, --xml\t\t\tNmap xml to parse");
     println!();
 }
 
