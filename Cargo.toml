@@ -5,7 +5,6 @@ edition = "2021"
 authors = ["abut0n"]
 description = "nmap serializer & deserializer"
 repository = "https://github.com/marcuccio/nmapx"
-documentation = ""
 readme = "README.md"
 license = "GNU General Public License v3.0"
 
