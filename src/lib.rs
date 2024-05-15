@@ -1,11 +1,97 @@
-use serde_xml_rs::Error;
-use serde_xml_rs;
+use std::{error::Error, io, path::PathBuf};
+
 use serde::{Deserialize, Serialize};
+use csv::{Terminator, Writer};
+
+use serde_xml_rs;
+
+mod util;
+
+pub fn as_json<W: io::Write>(list_of_nmaps: Vec<PathBuf>, w: W) -> Result<(), Box<dyn Error>> {
+
+    let mut collector: Vec<Host> = vec![];
+
+    for nmap in list_of_nmaps {
+        util::debug(format!("[+] Found nmap file"));
+
+        let scan = from_file(&nmap)?;
+
+        collector.extend_from_slice(&scan.host);
+    }
+
+    util::debug(format!("[+] Collector length: {}", collector.len()));
+
+    // Serialize the collector vector into JSON and write it using the writer provided
+    serde_json::to_writer(w, &collector);
+
+    Ok(())
+}
+
+pub fn as_csv<W: io::Write>(list_of_nmaps: Vec<PathBuf>, w: W) -> Result<(), Box<dyn Error>>  {
+    
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .terminator(Terminator::CRLF)
+        .from_writer(w);
+
+    let header = vec![
+        "addr", "addrtype", "port", "protocol", "state", "service"
+    ];
+    
+    wtr.write_record(header)?;
+
+    for nessus in list_of_nmaps {
+        let scan = from_file(&nessus)?;
+        to(&scan, &mut wtr)?;
+    }
+    
+    wtr.flush()?;
+    Ok(())
+}
+
+fn to<W: io::Write>(scan: &Scan, wtr: &mut Writer<W>) -> Result<(), Box<dyn Error>> {
+    
+    for host in scan.host.iter() {
+        let address = &host.address;
+        
+        for ports in host.ports.iter() {
+                match &ports.port {
+                    Some(port) => {
+                        for p in port.iter() {
+                            let row: Row = Row { address: address.clone(), port: p.clone() };
+
+                            if let Err(e) = wtr.serialize(&row) {
+                                util::error(format!("[Error] Failed to serialize row {:?}: {}", address, e));
+                            }
+                        }
+                    },
+                    
+                    None => unimplemented!()
+                }
+        }
+    }
+
+    Ok(())
+}
 
 
+pub fn from_file(xml: &PathBuf) -> Result<Scan, serde_xml_rs::Error> {
+    
+    let file = std::fs::read_to_string(xml)?;
 
-/// from_str Qualys Reports
-pub fn from_str<I: Into<String>>(buffer: I) -> Result<Scan, Error> {
+    from_str(file)
+}
+#[derive(Deserialize, Serialize)]
+
+struct Row {
+    pub address: Address,
+    pub port: Port
+
+}
+
+
+/// from_str Nmap Reports
+pub fn from_str<I: Into<String>>(buffer: I) -> Result<Scan, serde_xml_rs::Error> {
     let nmaprun: Scan = serde_xml_rs::from_reader(buffer.into().as_bytes())?;
     Ok(nmaprun)
 }
@@ -40,7 +126,7 @@ pub struct Host {
     pub address: Address,
     pub hostnames: Hostnames,
     pub ports: Vec<Ports>,
-    pub os: Os,
+    pub os: Option<Os>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uptime: Option<Uptime>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,7 +205,12 @@ pub struct Service {
 pub struct Status { pub state: String, pub reason: String, pub reason_ttl: String}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct Extrareasons { pub reason: String, pub count: String, pub proto: String, pub ports: String}
+pub struct Extrareasons { 
+    pub reason: Option<String>, 
+    pub count: Option<String>,
+    pub proto: Option<String>, 
+    pub ports: Option<String>
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Portused { pub state: String, pub proto: String, 
