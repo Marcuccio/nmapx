@@ -2,38 +2,38 @@
 Fast and reliable rust implementation of xml to json parser for nmap scans.
 
 ```bash
-nmapx -h
-nmapx 1.0.0 (c) 2023 by abut0n
+nmap serializer & deserializer
 
+Usage: nmapx [OPTIONS] <NMAP>...
 
-Usage: nmapx [options]
+Arguments:
+  <NMAP>...  The XML files to use
+
 Options:
-  -h, --help                    Print this help
-  -v, --version                 Print version information
-  -x, --xml                     Nmap xml to parse
-```
-
-## How to use it
-
-```bash
-nmapx -x nmap_report.xml > out.json
-[WRN] Use with caution. You are responsible for your actions.
-[WRN] Developers assume no liability and are not responsible for any misuse or damage.
+  -c, --csv              Outputs in CSV format
+  -j, --json             Outputs in JSON format
+  -o, --output <OUTPUT>  Specifies the base name of the output file. The correct extension will be appended based on the selected format
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## Installation
 
 You can easily install this package using Cargo, Rust's package manager and build tool. Before proceeding, ensure you have Rust and Cargo installed on your system. If you do not have Rust installed, you can download it from [the official Rust website](https://www.rust-lang.org/tools/install).
 
-### Using Cargo Install
-
-To install this package, run the following command in your terminal:
-
 ```sh
 cargo install nmapx
 ```
 
-## ... or use nmapx in your projects as lib
+## How to use it
+
+```bash
+nmapx nmap_report.xml
+[WRN] Use with caution. You are responsible for your actions.
+
+```
+
+### ... or use nmapx in your projects as lib
 
 ```rust
 use nmapx::from_str;
