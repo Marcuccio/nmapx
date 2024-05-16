@@ -21,7 +21,19 @@ nmapx -x nmap_report.xml > out.json
 [WRN] Developers assume no liability and are not responsible for any misuse or damage.
 ```
 
-## ... or use nmapx in your projects
+## Installation
+
+You can easily install this package using Cargo, Rust's package manager and build tool. Before proceeding, ensure you have Rust and Cargo installed on your system. If you do not have Rust installed, you can download it from [the official Rust website](https://www.rust-lang.org/tools/install).
+
+### Using Cargo Install
+
+To install this package, run the following command in your terminal:
+
+```sh
+cargo install nmapx
+```
+
+## ... or use nmapx in your projects as lib
 
 ```rust
 use nmapx::from_str;
