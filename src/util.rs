@@ -39,11 +39,6 @@ pub fn read_file(path: &str) -> Result<File, std::io::Error> {
 // FILE REMOTE UTILITIES //
 //////////////////////////
 
-pub fn dwnld_from_url(url: &str) -> Result<reqwest::blocking::Response, Box<dyn std::error::Error>> {
-    let resp = reqwest::blocking::get(url)?;
-    Ok(resp)
-}
-
 pub fn get_stdio_lines() -> Vec<String> {
     let stdin = io::stdin();
     let lines = stdin.lock().lines();

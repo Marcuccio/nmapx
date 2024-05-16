@@ -1,13 +1,116 @@
-use serde_xml_rs::Error;
-use serde_xml_rs;
+use std::{io, path::PathBuf};
+
 use serde::{Deserialize, Serialize};
+use csv:: Writer;
+
+use serde_xml_rs;
+
+mod util;
+
+pub fn as_json<W: io::Write>(list_of_nmaps: Vec<PathBuf>, mut w: W) -> Result<(), serde_json::Error> {
+    let mut collector: Vec<Host> = vec![];
+
+    for nmap in list_of_nmaps {
+        util::debug(format!("[+] Found nmap file: {:?}", nmap));
+        
+        match from_file(&nmap) {
+            Some(scan) => collector.extend_from_slice(&scan.host),
+            None => {
+                util::error(format!("Failed to read nmap file: {:?}", nmap));
+            }
+        }
+    }
+
+    if let Err(e) = serde_json::to_writer(&mut w, &collector) {
+        util::error(format!("Failed to write JSON: {}", e));
+        return Err(e);
+    }
+
+    Ok(())
+}
+
+pub fn as_csv<W: io::Write>(list_of_nmaps: Vec<PathBuf>, mut w: W) -> Result<(), csv::Error> {
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .terminator(csv::Terminator::CRLF)
+        .from_writer(&mut w);
+
+    let header = vec!["addr", "addrtype", "protocol", "portid", "state", "reason", "reason_ttl","name", "product", "tunnel", "method", "conf"];
+    
+    if let Err(e) = writer.write_record(&header) {
+        util::error(format!("Failed to write CSV header: {}", e));
+        return Err(e);
+    }
+
+    for nmap in list_of_nmaps {
+        if let Some(scan) = from_file(&nmap) {
+            if let Err(e) = to(&scan, &mut writer) {
+                util::error(format!("Failed to convert {:?} to CSV: {}", nmap, e));
+            }
+        } else {
+            util::error(format!("Failed to read Nessus file: {:?}", nmap));
+        }
+    }
+    
+    if let Err(e) = writer.flush() {
+        util::error(format!("Failed to flush CSV data: {}", e));
+        return Err(e.into());
+    }
+    
+    Ok(())
+}
 
 
+fn to<W: io::Write>(scan: &Scan, wtr: &mut Writer<W>) -> Result<(), csv::Error> {
+    for host in &scan.host {
+        let address = &host.address;
+        
+        for ports in &host.ports {
+            if let Some(port) = &ports.port {
+                for p in port {
+                    let row = Row {
+                        address: address.clone(),
+                        port: p.clone(),
+                    };
+                    wtr.serialize(&row)?
+                }
+            } else {
+                util::info(format!("No port information available for host: {:?}", address));
+            }
+        }
+    }
+    Ok(())
+}
 
-/// from_str Qualys Reports
-pub fn from_str<I: Into<String>>(buffer: I) -> Result<Scan, Error> {
+/// Reads a file and parses it into a Scan struct
+pub fn from_file(xml: &PathBuf) -> Option<Scan> {
+    let scan = match std::fs::read_to_string(xml) {
+        Ok(file_content) => match from_str(&file_content) {
+            Ok(scan) => Some(scan),
+            Err(e) => {
+                util::error(format!("Failed to parse XML: {}", e));
+                None
+            }
+        },
+        Err(e) => {
+            util::error(format!("Failed to read file: {}", e));
+            None
+        }
+    };
+    scan
+}
+
+/// Parses an Nmap report from a string
+pub fn from_str<I: Into<String>>(buffer: I) -> Result<Scan, serde_xml_rs::Error> {
     let nmaprun: Scan = serde_xml_rs::from_reader(buffer.into().as_bytes())?;
     Ok(nmaprun)
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Row {
+    pub address: Address,
+    pub port: Port
+
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -22,7 +125,6 @@ pub struct Scan {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Scaninfo { 
     pub r#type: String, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
     pub numservices: String,
     pub services: String
@@ -40,16 +142,11 @@ pub struct Host {
     pub address: Address,
     pub hostnames: Hostnames,
     pub ports: Vec<Ports>,
-    pub os: Os,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub os: Option<Os>,
     pub uptime: Option<Uptime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tcpsequence: Option<Tcpsequence>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub ipidsequence: Option<Ipidsequence>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tcptssequence: Option<Tcptssequence>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub times: Option<Times>
 }
 
@@ -58,7 +155,6 @@ pub struct Address { pub addr: String, pub addrtype: String}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Hostnames {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub hostname: Option<Hostname>
 } 
 
@@ -83,14 +179,9 @@ pub struct Hostname {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Port {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub portid: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<State>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub service: Option<Service>,
 }
 
@@ -99,19 +190,14 @@ pub struct State { pub state: String, pub reason: String, pub reason_ttl: String
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Service { 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub product: Option<String>, 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing)]
     pub servicefp: Option<String>, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tunnel: Option<String>, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub conf: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing)]
     pub cpe: Option<Vec<CPE>>
 }
 
@@ -119,11 +205,15 @@ pub struct Service {
 pub struct Status { pub state: String, pub reason: String, pub reason_ttl: String}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct Extrareasons { pub reason: String, pub count: String, pub proto: String, pub ports: String}
+pub struct Extrareasons { 
+    pub reason: Option<String>, 
+    pub count: Option<String>,
+    pub proto: Option<String>, 
+    pub ports: Option<String>
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Portused { pub state: String, pub proto: String, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub portid: Option<String>
 }
 
@@ -133,19 +223,16 @@ pub struct Uptime { pub seconds: String, pub lastboot: String}
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Tcpsequence { 
     pub index: String, pub difficulty: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Ipidsequence { pub class: String, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Tcptssequence { pub class: String, 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<String>
 }
 
@@ -160,9 +247,7 @@ pub struct Hosts { pub up: String, pub down: String, pub total: String}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Os { 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub portused: Option<Vec<Portused>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub osmatch: Option<Vec<Osmatch>>
 }
 
@@ -171,7 +256,6 @@ pub struct Osmatch {
     pub name:String,
     pub accuracy:String,
     pub line:String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub osclass: Option<Vec<Osclass>>,
 }
 
@@ -179,16 +263,10 @@ pub struct Osmatch {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Osclass {
     pub r#type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub vendor: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub osfamily: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub osgen: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub accuracy: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub cpe: Option<Vec<String>>
 }
 
