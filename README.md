@@ -1,7 +1,8 @@
 # nmapx
-Fast and reliable rust implementation of xml to json parser for nmap scans.
+A fast and reliable Rust tool for converting Nmap scan results from XML to JSON or CSV formats.
 
 ```bash
+>$ nmapx --help
 nmap serializer & deserializer
 
 Usage: nmapx [OPTIONS] <NMAP>...
@@ -25,28 +26,12 @@ You can easily install this package using Cargo, Rust's package manager and buil
 cargo install nmapx
 ```
 
-## How to use it
+#### ... or use nmapx in your projects as lib
 
-```bash
-nmapx nmap_report.xml
-[WRN] Use with caution. You are responsible for your actions.
-
+```sh
+cargo add nmapx
 ```
 
-### ... or use nmapx in your projects as lib
-
-```rust
-use nmapx::from_str;
-
-fn main() {
-
-    let file: String = std::fs::read_to_string(xml).unwrap();
-    let scan: nmapx::Scan = nmapx::from_str(&file).unwrap();
-    let j = serde_json::to_string(&scan).unwrap();
-    
-    println!("{}", j);
-}
-````
 # Contribute
 
 Contributions are always welcome! Please create a PR to add Github Profile.
